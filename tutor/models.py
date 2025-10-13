@@ -1,49 +1,38 @@
-# tutor/models.py
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.postgres.fields import ArrayField  # PostgreSQL array type (for embeddings)
+from pgvector.django import VectorField
 
-class Resource(models.Model):
-    TYPE_CHOICES = [
-        ("pdf", "PDF"),
-        ("youtube", "YouTube"),
-        ("text", "Plain Text/Markdown"),
+# 🧾 Represents each uploaded document (PDF, text, etc.)
+class Document(models.Model):
+    UPLOAD = "upload"
+    YOUTUBE = "youtube"
+    WEBSITE = "website"
+    SOURCE_CHOICES = [
+        (UPLOAD, "Upload"),
+        (YOUTUBE, "YouTube"),
+        (WEBSITE, "Website"),
     ]
+
+    session_key = models.CharField(max_length=255, db_index=True)  # links uploads to a session
     title = models.CharField(max_length=255)
-    kind = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    source_path = models.TextField(help_text="File path or URL")
-    created_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES)
+    uploaded_file = models.FileField(upload_to="uploads/", null=True, blank=True)
+    content = models.TextField(blank=True, default="")  # full extracted text
+    date_uploaded = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.title} ({self.kind})"
+        return self.title
 
-class ChatSession(models.Model):
-    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
-    topic = models.CharField(max_length=200, default="General")
-    created_at = models.DateTimeField(auto_now_add=True)
 
-class ChatMessage(models.Model):
-    ROLE_CHOICES = [("user", "User"), ("ai", "AI")]
-    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="messages")
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
-    content = models.TextField()
-    tokens = models.IntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
+# 🧠 Represents a small chunk of text + its embedding vector
+# app/models.py
 
-class Quiz(models.Model):
-    session = models.ForeignKey(ChatSession, on_delete=models.SET_NULL, null=True, blank=True, related_name="quizzes")
-    title = models.CharField(max_length=200)
-    created_at = models.DateTimeField(auto_now_add=True)
-    raw_json = models.JSONField(default=dict)  # canonical quiz structure
+class DocumentChunk(models.Model):
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="chunks")
+    text = models.TextField()
+    embedding = VectorField(dimensions=384)  # ✅ use pgvector type
+    chunk_index = models.PositiveIntegerField(default=0)
 
-class QuizQuestion(models.Model):
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="questions")
-    prompt = models.TextField()
-    choices = models.JSONField(default=list)   # ["A. ...", "B. ...", ...] or empty for open-ended
-    answer = models.CharField(max_length=10, blank=True)  # e.g., "B" or free text
+    def __str__(self):
+        return f"Chunk {self.chunk_index} of {self.document.title}"
 
-class QuizAttempt(models.Model):
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
-    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
-    responses = models.JSONField(default=dict)  # {q_id: "B", ...}
-    score = models.FloatField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)

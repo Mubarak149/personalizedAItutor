@@ -22,3 +22,16 @@ rad.json
 TestResults.xml
 #sqlite db
 db.sqlite3
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+migrations/
+venv/
+ENV/
+env.bak/
+test.py
+.env
