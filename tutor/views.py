@@ -1,4 +1,5 @@
 import re
+import json
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from django.shortcuts import render
 from django.conf import settings
@@ -20,10 +21,14 @@ from django.http import JsonResponse
 from . import utils
 
 def chatlearner_view(request):
-    query = request.POST.get("question") or request.GET.get("question")
-
     if request.method == "POST":
-        # ✅ Validate input
+        try:
+            # ✅ Read JSON body safely
+            data = json.loads(request.body.decode("utf-8"))
+            query = data.get("question")
+        except Exception:
+            query = None
+
         if not query or not query.strip():
             return JsonResponse({"error": "Please enter a question"}, status=400)
 
@@ -37,7 +42,6 @@ def chatlearner_view(request):
 
     # Render UI (GET)
     return render(request, "chatlearner.html")
-
 
 def semantic_search_view(request):
     query = request.GET.get("query")
@@ -136,7 +140,7 @@ class DocumentUploadView(APIView):
     
 # POST JSON {type: "youtube"|"website", url: "...", videoId?: "..."}
 class ProcessLinkView(APIView):
-    permission_classes = [permissions.AllowAny]
+    
     def post(self, request, *args, **kwargs):
         if not request.session.session_key:
             request.session.save()
@@ -153,13 +157,30 @@ class ProcessLinkView(APIView):
                 text = utils.fetch_youtube_transcript(video_id)
             except Exception as exc:
                 return Response({"error": f"Transcript fetch failed: {str(exc)}"}, status=status.HTTP_400_BAD_REQUEST)
+            
             doc = Document.objects.create(
                 session_key=session_key,
                 title=f"YouTube:{video_id}",
                 source=Document.YOUTUBE,
                 content=text,
-                meta={"url": url, "videoId": video_id}
             )
+            chunks = utils.chunk_content(text, chunk_size=500, chunk_overlap=50)
+
+            embeddings = utils.embed_chunks(chunks)
+
+            chunk_objs = [
+                    DocumentChunk(
+                        document=doc,
+                        text=chunk,
+                        embedding=emb.tolist(),  # convert NumPy array → Python list
+                        chunk_index=idx
+                    )
+                    for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+                ]
+
+            DocumentChunk.objects.bulk_create(chunk_objs, batch_size=100)
+
+            doc.save()
             return Response({"status": "ok", "document": DocumentSerializer(doc).data}, status=status.HTTP_201_CREATED)
 
         elif typ == "website":
@@ -174,8 +195,24 @@ class ProcessLinkView(APIView):
                 title=f"Website:{url}",
                 source=Document.WEBSITE,
                 content=text,
-                meta={"url": url}
             )
+            chunks = utils.chunk_content(text, chunk_size=500, chunk_overlap=50)
+            
+            embeddings = utils.embed_chunks(chunks)
+     
+            chunk_objs = [
+                    DocumentChunk(
+                        document=doc,
+                        text=chunk,
+                        embedding=emb.tolist(),  # convert NumPy array → Python list
+                        chunk_index=idx
+                    )
+                    for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+                ]
+
+            DocumentChunk.objects.bulk_create(chunk_objs, batch_size=100)
+
+            doc.save()
             return Response({"status": "ok", "document": DocumentSerializer(doc).data}, status=status.HTTP_201_CREATED)
 
         return Response({"error": "Invalid link type"}, status=status.HTTP_400_BAD_REQUEST)

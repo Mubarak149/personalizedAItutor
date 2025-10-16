@@ -85,17 +85,58 @@ function extractYoutubeId(url) {
   return null;
 }
 
+// ✅ Function to process a pasted link automatically
+async function processLink(url, type) {
+  addMessage(`🔗 Processing ${type} link...`, "assistant");
+
+  try {
+    const resp = await fetch("http://127.0.0.1:8000/api/documents/process-link/", {
+      method: "POST",
+      headers: { 
+        "X-CSRFToken": csrftoken,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ url, type })
+    });
+
+    const data = await resp.json();
+
+    if (resp.ok) {
+      addMessage(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} processed successfully!`, "assistant");
+    } else {
+      addMessage(`⚠️ Failed to process ${type}: ${data.error || JSON.stringify(data)}`, "assistant");
+    }
+  } catch (err) {
+    addMessage(`⚠️ Error processing ${type}: ${err.message}`, "assistant");
+  }
+}
+
+// ✅ Detect paste event on YouTube field
+youtubeInput.addEventListener("paste", async (e) => {
+  setTimeout(() => {
+    const link = youtubeInput.value.trim();
+    if (link && (link.includes("youtube.com") || link.includes("youtu.be"))) {
+      processLink(link, "youtube");
+    }
+  }, 100);
+});
+
+// ✅ Detect paste event on Website field
+websiteInput.addEventListener("paste", async (e) => {
+  setTimeout(() => {
+    const link = websiteInput.value.trim();
+    if (link && link.startsWith("http")) {
+      processLink(link, "website");
+    }
+  }, 100);
+});
+
 // ✅ Auto-upload when files are selected
 fileInput.addEventListener("change", async (e) => {
   const files = e.target.files;
   if (!files.length) return;
 
-  // Add message feedback to chat
-  const uploadMsg = document.createElement("div");
-  uploadMsg.classList.add("msg", "assistant");
-  uploadMsg.textContent = "📤 Uploading document(s)...";
-  chatBox.appendChild(uploadMsg);
-  chatBox.scrollTop = chatBox.scrollHeight;
+  addMessage("📤 Uploading document(s)...", "assistant");
 
   const formData = new FormData();
   for (let f of files) {
@@ -112,12 +153,12 @@ fileInput.addEventListener("change", async (e) => {
     const data = await resp.json();
 
     if (resp.ok) {
-      uploadMsg.textContent = `✅ Uploaded ${data.documents.length} file(s) successfully.`;
+      addMessage(`✅ Uploaded ${data.documents.length} file(s) successfully.`, "assistant");
     } else {
-      uploadMsg.textContent = `⚠️ Upload failed: ${data.error || JSON.stringify(data)}`;
+      addMessage(`⚠️ Upload failed: ${data.error || JSON.stringify(data)}`, "assistant");
     }
   } catch (err) {
-    uploadMsg.textContent = "⚠️ Error during upload: " + err.message;
+    addMessage("⚠️ Error during upload: " + err.message, "assistant");
   }
 });
 
@@ -125,16 +166,11 @@ fileInput.addEventListener("change", async (e) => {
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = userInput.value.trim();
-  const youtubeUrl = youtubeInput.value.trim();
-  const websiteUrl = websiteInput.value.trim();
+  if (!text) return;
 
-  if (!text && !youtubeUrl && !websiteUrl) return;
-
-  // Add user message
-  addMessage(text || "[Sent link]", "user");
+  addMessage(text, "user");
   userInput.value = "";
 
-  // Placeholder response
   const placeholder = document.createElement("div");
   placeholder.classList.add("msg", "assistant");
   placeholder.textContent = "🤖 Thinking...";
@@ -142,30 +178,10 @@ chatForm.addEventListener("submit", async (e) => {
   chatBox.scrollTop = chatBox.scrollHeight;
 
   try {
-    // Process YouTube link
-    if (youtubeUrl) {
-      const vid = extractYoutubeId(youtubeUrl);
-      await fetch("http://127.0.0.1:8000/chatlearner/", {
-        method: "POST",
-        headers: { "X-CSRFToken": csrftoken, "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "youtube", url: youtubeUrl, videoId: vid })
-      });
-    }
-
-    // Process Website link
-    if (websiteUrl) {
-      await fetch("http://127.0.0.1:8000/chatlearner/", {
-        method: "POST",
-        headers: { "X-CSRFToken": csrftoken, "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "website", url: websiteUrl })
-      });
-    }
-
-    // Send the actual question
     const resp = await fetch("http://127.0.0.1:8000/chatlearner/", {
       method: "POST",
       headers: { "X-CSRFToken": csrftoken, "Content-Type": "application/json" },
-      body: JSON.stringify({ question: text || "Summarize the uploaded content" })
+      body: JSON.stringify({ question: text })
     });
 
     const data = await resp.json();

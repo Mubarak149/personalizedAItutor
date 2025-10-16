@@ -35,5 +35,5 @@ ENV/
 env.bak/
 test.py
 .env
-upload/
+uploads/
 .DS_Store
