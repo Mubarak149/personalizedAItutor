@@ -10,6 +10,9 @@ from langchain_community.document_loaders import YoutubeLoader, WebBaseLoader, P
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.schema import Document
+from langchain_groq import ChatGroq
+from langchain.prompts import ChatPromptTemplate
+from langchain.chains import LLMChain
 
 # ✅ Django and project imports
 from rest_framework.exceptions import ValidationError
@@ -25,6 +28,36 @@ except Exception:
 
 # 🧠 LangChain embedding model (wrapped for compatibility)
 EMBEDDING_MODEL = EMBEDDING_MODEL = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+# Initialize Groq model
+LLM = ChatGroq(
+    model_name="qwen/qwen3-32b",  # You can change to "mixtral-8x7b" or "gemma-7b-it"
+    temperature=0.4,
+)
+
+def generate_answer_from_chunks(question, chunks):
+    # Combine text from the most relevant chunks
+    context = "\n\n".join([c["text"] for c in chunks])
+
+    # Prompt template for educational-style answers
+    prompt_template = ChatPromptTemplate.from_template("""
+        You are an AI tutor that explains complex ideas in simple, easy-to-understand language.
+
+        Use the following context to answer the student's question. Be clear, encouraging, and educational.
+        If the answer cannot be found, politely say you don't know and suggest what to study next.
+
+        Context:
+        {context}
+
+        Question:
+        {question}
+
+        Explain as if you are teaching a beginner student:
+        """)
+
+    chain = LLMChain(llm=LLM, prompt=prompt_template)
+    response = chain.run({"context": context, "question": question})
+    return response.strip()
 
 
 # ✅ Validate uploaded file extension and size
@@ -129,13 +162,17 @@ def embed_chunks(chunks):
 
 
 # ✅ Store and retrieve embeddings (pgvector search)
-def search_similar_chunks(query: str, top_k=5):
+def search_similar_chunks(query: str, docs, top_k=5):
     query_embedding = EMBEDDING_MODEL.embed_query(query)
+    doc_ids = [d["id"] for d in docs]
+
     similar_chunks = (
         DocumentChunk.objects
+        .filter(document_id__in=doc_ids)
         .annotate(distance=CosineDistance('embedding', query_embedding))
         .order_by('distance')[:top_k]
     )
+
     return [
         {
             "text": chunk.text,
@@ -144,3 +181,13 @@ def search_similar_chunks(query: str, top_k=5):
         }
         for chunk in similar_chunks
     ]
+
+
+
+# small helper used by ProcessLinkView
+def extract_youtube_id(url):
+    if not url:
+        return None
+    m = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{6,})", url)
+    return m.group(1) if m else None
+

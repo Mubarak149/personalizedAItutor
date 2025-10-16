@@ -6,191 +6,577 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>ChatLearner</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body { background: #f8f9fa; }
+    :root {
+      --primary-color: #4361ee;
+      --secondary-color: #3f37c9;
+      --light-color: #f8f9fa;
+      --dark-color: #212529;
+      --user-msg-color: #4361ee;
+      --assistant-msg-color: #f1f3f5;
+      --success-color: #4cc9f0;
+      --warning-color: #f72585;
+    }
+    
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .chat-container {
+      max-width: 800px;
+      height: 90vh;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .chat-header {
+      background: var(--primary-color);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 20px 20px 0 0;
+    }
+    
+    .chat-header h3 {
+      margin: 0;
+      font-weight: 600;
+    }
+    
+    .chat-header p {
+      margin: 5px 0 0;
+      opacity: 0.9;
+      font-size: 0.9rem;
+    }
+    
     #chat-box {
-      height: 70vh;
+      flex: 1;
       overflow-y: auto;
-      border: 1px solid #ddd;
-      border-radius: 10px;
+      padding: 20px;
+      background: #fafbff;
+    }
+    
+    .message {
+      display: flex;
+      margin-bottom: 20px;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .message.user {
+      justify-content: flex-end;
+    }
+    
+    .message-content {
+      max-width: 70%;
+      padding: 12px 18px;
+      border-radius: 18px;
+      position: relative;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+    
+    .message.user .message-content {
+      background: var(--user-msg-color);
+      color: white;
+      border-bottom-right-radius: 5px;
+    }
+    
+    .message.assistant .message-content {
+      background: var(--assistant-msg-color);
+      color: var(--dark-color);
+      border-bottom-left-radius: 5px;
+    }
+    
+    .message.assistant .message-content::before {
+      content: "🤖";
+      margin-right: 8px;
+    }
+    
+    .message.user .message-content::before {
+      content: "👤";
+      margin-right: 8px;
+    }
+    
+    .typing-indicator {
+      display: inline-flex;
+      align-items: center;
+      padding: 12px 18px;
+      background: var(--assistant-msg-color);
+      border-radius: 18px;
+      border-bottom-left-radius: 5px;
+      max-width: 70%;
+    }
+    
+    .typing-dot {
+      height: 8px;
+      width: 8px;
+      border-radius: 50%;
+      background: #999;
+      margin: 0 2px;
+      animation: typing 1.4s infinite ease-in-out;
+    }
+    
+    .typing-dot:nth-child(1) { animation-delay: 0s; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-5px); }
+    }
+    
+    .input-area {
       padding: 15px;
       background: white;
+      border-top: 1px solid #eaeaea;
     }
-    .msg { margin-bottom: 10px; max-width: 75%; padding: 10px 15px; border-radius: 15px; }
-    .msg.user { background: #0d6efd; color: white; margin-left: auto; text-align: right; }
-    .msg.assistant { background: #f1f3f5; text-align: left; }
+    
+    .input-group {
+      display: flex;
+      gap: 10px;
+    }
+    
+    #user-input {
+      flex: 1;
+      border-radius: 25px;
+      padding: 12px 20px;
+      border: 1px solid #ddd;
+      outline: none;
+      transition: all 0.3s;
+    }
+    
+    #user-input:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+    }
+    
+    .send-btn {
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+    
+    .send-btn:hover {
+      background: var(--secondary-color);
+      transform: scale(1.05);
+    }
+    
+    .upload-section {
+      background: white;
+      padding: 15px;
+      border-top: 1px solid #eaeaea;
+    }
+    
+    .upload-options {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .upload-option {
+      flex: 1;
+      min-width: 150px;
+      border: 2px dashed #ddd;
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .upload-option:hover {
+      border-color: var(--primary-color);
+      background: rgba(67, 97, 238, 0.05);
+    }
+    
+    .upload-option i {
+      font-size: 24px;
+      color: var(--primary-color);
+      margin-bottom: 8px;
+    }
+    
+    .upload-option span {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--dark-color);
+    }
+    
+    .hidden-input {
+      display: none;
+    }
+    
+    .status-message {
+      padding: 8px 15px;
+      border-radius: 15px;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+      text-align: center;
+      background: rgba(76, 201, 240, 0.1);
+      color: #4cc9f0;
+      border: 1px solid rgba(76, 201, 240, 0.2);
+    }
+    
+    .status-message.error {
+      background: rgba(247, 37, 133, 0.1);
+      color: #f72585;
+      border: 1px solid rgba(247, 37, 133, 0.2);
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .chat-container {
+        height: 95vh;
+        border-radius: 0;
+      }
+      
+      .message-content {
+        max-width: 85%;
+      }
+      
+      .upload-options {
+        flex-direction: column;
+      }
+    }
   </style>
 </head>
 <body>
-<div class="container py-4">
-  <h3 class="mb-3">📚 ChatLearner</h3>
-
-  <div id="chat-box">
-    <div class="msg assistant">Hi! Upload a file, paste a YouTube link, or a website — then ask me anything!</div>
+  <div class="container py-4 d-flex justify-content-center align-items-center min-vh-100">
+    <div class="chat-container">
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <h3><i class="fas fa-graduation-cap me-2"></i>ChatLearner</h3>
+        <p>Upload documents, paste YouTube links, or add websites to learn from them</p>
+      </div>
+      
+      <!-- Chat Messages Area -->
+      <div id="chat-box">
+        <div class="message assistant">
+          <div class="message-content">
+            Hi! I'm ChatLearner. Upload a file, paste a YouTube link, or add a website URL — then ask me anything about the content!
+          </div>
+        </div>
+      </div>
+      
+      <!-- Input Area -->
+      <div class="input-area">
+        <form id="chat-form">
+          {% csrf_token %}
+          <div class="input-group">
+            <input type="text" id="user-input" class="form-control" placeholder="Type your question here...">
+            <button class="send-btn" type="submit">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+      
+      <!-- Upload Section -->
+      <div class="upload-section">
+        <div class="upload-options">
+          <!-- Document Upload -->
+          <div class="upload-option" id="document-upload-trigger">
+            <i class="fas fa-file-upload"></i>
+            <span>Upload Documents</span>
+            <input type="file" id="file-input" class="hidden-input" multiple>
+          </div>
+          
+          <!-- YouTube Link -->
+          <div class="upload-option" id="youtube-trigger">
+            <i class="fab fa-youtube"></i>
+            <span>YouTube Link</span>
+            <input type="url" id="youtube-link" class="hidden-input" placeholder="https://youtube.com/watch?v=...">
+          </div>
+          
+          <!-- Website URL -->
+          <div class="upload-option" id="website-trigger">
+            <i class="fas fa-globe"></i>
+            <span>Website URL</span>
+            <input type="url" id="website-link" class="hidden-input" placeholder="https://example.com">
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <form id="chat-form" class="mt-3" method="post">
-    {% csrf_token %}
-    <div class="input-group mb-2">
-      <input type="text" id="user-input" class="form-control" placeholder="Ask your question...">
-      <button class="btn btn-primary" type="submit">Send</button>
+  <!-- Modal for URL Input -->
+  <div class="modal fade" id="urlModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="urlModalTitle">Add Link</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="url" id="modal-url-input" class="form-control" placeholder="Paste your link here...">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="process-url-btn">Process</button>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="mb-2">
-      <label class="form-label">Upload Documents</label>
-      <input type="file" id="file-input" class="form-control" multiple>
-    </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    // DOM Elements - Get references to important HTML elements
+    const chatBox = document.getElementById("chat-box");
+    const chatForm = document.getElementById("chat-form");
+    const userInput = document.getElementById("user-input");
+    const fileInput = document.getElementById("file-input");
+    const youtubeInput = document.getElementById("youtube-link");
+    const websiteInput = document.getElementById("website-link");
+    const documentUploadTrigger = document.getElementById("document-upload-trigger");
+    const youtubeTrigger = document.getElementById("youtube-trigger");
+    const websiteTrigger = document.getElementById("website-trigger");
+    const urlModal = new bootstrap.Modal(document.getElementById('urlModal'));
+    const modalUrlInput = document.getElementById("modal-url-input");
+    const processUrlBtn = document.getElementById("process-url-btn");
+    
+    // Track current URL type for modal processing
+    let currentUrlType = "";
 
-    <div class="mb-2">
-      <label class="form-label">YouTube Link</label>
-      <input type="url" id="youtube-link" class="form-control" placeholder="https://youtube.com/watch?v=...">
-    </div>
+    // Function to get CSRF token for secure communication with Django backend
+    function getCSRFToken() {
+      return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    }
 
-    <div class="mb-2">
-      <label class="form-label">Website URL</label>
-      <input type="url" id="website-link" class="form-control" placeholder="https://example.com">
-    </div>
-  </form>
+    const csrftoken = getCSRFToken();
 
-</div>
+    // Function to add a message to the chat
+    function addMessage(text, role = "assistant") {
+      const messageDiv = document.createElement("div");
+      messageDiv.classList.add("message", role);
+      
+      const contentDiv = document.createElement("div");
+      contentDiv.classList.add("message-content");
+      // Convert Markdown to HTML safely
+      let cleanText = text.replace(/<think>.*?<\/think>/gs, ""); // remove think tags if present
+      contentDiv.innerHTML = marked.parse(cleanText);
 
-<script>
-const chatBox = document.getElementById("chat-box");
-const chatForm = document.getElementById("chat-form");
-const userInput = document.getElementById("user-input");
-const fileInput = document.getElementById("file-input");
-const youtubeInput = document.getElementById("youtube-link");
-const websiteInput = document.getElementById("website-link");
+      
+      messageDiv.appendChild(contentDiv);
+      chatBox.appendChild(messageDiv);
+      
+      // Auto-scroll to the latest message
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
-function getCSRFToken() {
-  return document.querySelector('[name=csrfmiddlewaretoken]').value;
-}
+    // Function to show a typing indicator
+    function showTypingIndicator() {
+      const typingDiv = document.createElement("div");
+      typingDiv.classList.add("message", "assistant");
+      typingDiv.id = "typing-indicator";
+      
+      const contentDiv = document.createElement("div");
+      contentDiv.classList.add("typing-indicator");
+      
+      // Add animated dots
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement("div");
+        dot.classList.add("typing-dot");
+        contentDiv.appendChild(dot);
+      }
+      
+      typingDiv.appendChild(contentDiv);
+      chatBox.appendChild(typingDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      
+      return typingDiv;
+    }
 
-const csrftoken = getCSRFToken();
+    // Function to remove typing indicator
+    function removeTypingIndicator() {
+      const indicator = document.getElementById("typing-indicator");
+      if (indicator) {
+        indicator.remove();
+      }
+    }
 
-function addMessage(text, role = "assistant") {
-  const msg = document.createElement("div");
-  msg.classList.add("msg", role);
-  msg.textContent = text;
-  chatBox.appendChild(msg);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
+    // Function to show a status message
+    function showStatusMessage(text, isError = false) {
+      const statusDiv = document.createElement("div");
+      statusDiv.classList.add("status-message");
+      if (isError) statusDiv.classList.add("error");
+      statusDiv.textContent = text;
+      
+      chatBox.appendChild(statusDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        if (statusDiv.parentNode) {
+          statusDiv.remove();
+        }
+      }, 5000);
+    }
 
-function extractYoutubeId(url) {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
-    if (u.hostname === "youtu.be") return u.pathname.slice(1);
-  } catch {}
-  return null;
-}
+    // Extract YouTube video ID from URL
+    function extractYoutubeId(url) {
+      try {
+        const u = new URL(url);
+        if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
+        if (u.hostname === "youtu.be") return u.pathname.slice(1);
+      } catch (error) {
+        console.error("Invalid URL:", error);
+      }
+      return null;
+    }
 
-// ✅ Function to process a pasted link automatically
-async function processLink(url, type) {
-  addMessage(`🔗 Processing ${type} link...`, "assistant");
+    // Process a link (YouTube or website)
+    async function processLink(url, type) {
+      addMessage(`🔗 Processing ${type} link...`, "assistant");
 
-  try {
-    const resp = await fetch("http://127.0.0.1:8000/api/documents/process-link/", {
-      method: "POST",
-      headers: { 
-        "X-CSRFToken": csrftoken,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ url, type })
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/documents/process-link/", {
+          method: "POST",
+          headers: { 
+            "X-CSRFToken": csrftoken,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ url, type })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          addMessage(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} processed successfully!`, "assistant");
+        } else {
+          addMessage(`⚠️ Failed to process ${type}: ${data.error || JSON.stringify(data)}`, "assistant");
+        }
+      } catch (error) {
+        addMessage(`⚠️ Error processing ${type}: ${error.message}`, "assistant");
+      }
+    }
+
+    // Event Listeners
+
+    // Document upload trigger
+    documentUploadTrigger.addEventListener("click", () => {
+      fileInput.click();
     });
 
-    const data = await resp.json();
-
-    if (resp.ok) {
-      addMessage(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} processed successfully!`, "assistant");
-    } else {
-      addMessage(`⚠️ Failed to process ${type}: ${data.error || JSON.stringify(data)}`, "assistant");
-    }
-  } catch (err) {
-    addMessage(`⚠️ Error processing ${type}: ${err.message}`, "assistant");
-  }
-}
-
-// ✅ Detect paste event on YouTube field
-youtubeInput.addEventListener("paste", async (e) => {
-  setTimeout(() => {
-    const link = youtubeInput.value.trim();
-    if (link && (link.includes("youtube.com") || link.includes("youtu.be"))) {
-      processLink(link, "youtube");
-    }
-  }, 100);
-});
-
-// ✅ Detect paste event on Website field
-websiteInput.addEventListener("paste", async (e) => {
-  setTimeout(() => {
-    const link = websiteInput.value.trim();
-    if (link && link.startsWith("http")) {
-      processLink(link, "website");
-    }
-  }, 100);
-});
-
-// ✅ Auto-upload when files are selected
-fileInput.addEventListener("change", async (e) => {
-  const files = e.target.files;
-  if (!files.length) return;
-
-  addMessage("📤 Uploading document(s)...", "assistant");
-
-  const formData = new FormData();
-  for (let f of files) {
-    formData.append("files", f);
-  }
-
-  try {
-    const resp = await fetch("http://127.0.0.1:8000/api/documents/upload/", {
-      method: "POST",
-      headers: { "X-CSRFToken": csrftoken },
-      body: formData
+    // YouTube link trigger
+    youtubeTrigger.addEventListener("click", () => {
+      currentUrlType = "youtube";
+      modalUrlInput.placeholder = "Paste YouTube link here...";
+      document.getElementById("urlModalTitle").textContent = "Add YouTube Link";
+      urlModal.show();
     });
 
-    const data = await resp.json();
-
-    if (resp.ok) {
-      addMessage(`✅ Uploaded ${data.documents.length} file(s) successfully.`, "assistant");
-    } else {
-      addMessage(`⚠️ Upload failed: ${data.error || JSON.stringify(data)}`, "assistant");
-    }
-  } catch (err) {
-    addMessage("⚠️ Error during upload: " + err.message, "assistant");
-  }
-});
-
-// ✅ Chat form submission
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = userInput.value.trim();
-  if (!text) return;
-
-  addMessage(text, "user");
-  userInput.value = "";
-
-  const placeholder = document.createElement("div");
-  placeholder.classList.add("msg", "assistant");
-  placeholder.textContent = "🤖 Thinking...";
-  chatBox.appendChild(placeholder);
-  chatBox.scrollTop = chatBox.scrollHeight;
-
-  try {
-    const resp = await fetch("http://127.0.0.1:8000/chatlearner/", {
-      method: "POST",
-      headers: { "X-CSRFToken": csrftoken, "Content-Type": "application/json" },
-      body: JSON.stringify({ question: text })
+    // Website link trigger
+    websiteTrigger.addEventListener("click", () => {
+      currentUrlType = "website";
+      modalUrlInput.placeholder = "Paste website URL here...";
+      document.getElementById("urlModalTitle").textContent = "Add Website URL";
+      urlModal.show();
     });
 
-    const data = await resp.json();
-    placeholder.textContent = data.answer || JSON.stringify(data);
-  } catch (err) {
-    placeholder.textContent = "⚠️ Error: " + err.message;
-  }
-});
-</script>
+    // Process URL from modal
+    processUrlBtn.addEventListener("click", () => {
+      const url = modalUrlInput.value.trim();
+      if (url) {
+        processLink(url, currentUrlType);
+        urlModal.hide();
+        modalUrlInput.value = "";
+      }
+    });
 
+    // Auto-upload when files are selected
+    fileInput.addEventListener("change", async (event) => {
+      const files = event.target.files;
+      if (!files.length) return;
+
+      showStatusMessage("📤 Uploading document(s)...");
+
+      const formData = new FormData();
+      for (let file of files) {
+        formData.append("files", file);
+      }
+
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/documents/upload/", {
+          method: "POST",
+          headers: { "X-CSRFToken": csrftoken },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showStatusMessage(`✅ Uploaded ${data.documents.length} file(s) successfully.`);
+        } else {
+          showStatusMessage(`⚠️ Upload failed: ${data.error || JSON.stringify(data)}`, true);
+        }
+      } catch (error) {
+        showStatusMessage("⚠️ Error during upload: " + error.message, true);
+      }
+    });
+
+    // Chat form submission
+    chatForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      // Add user message to chat
+      addMessage(text, "user");
+      userInput.value = "";
+
+      // Show typing indicator
+      showTypingIndicator();
+
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/chat/", {
+          method: "POST",
+          headers: { 
+            "X-CSRFToken": csrftoken, 
+            "Content-Type": "application/json" 
+          },
+          body: JSON.stringify({ question: text })
+        });
+
+        const data = await response.json();
+        
+        // Remove typing indicator
+        removeTypingIndicator();
+        
+        // Add assistant response
+        addMessage(data.answer || JSON.stringify(data), "assistant");
+      } catch (error) {
+        // Remove typing indicator
+        removeTypingIndicator();
+        
+        // Show error message
+        addMessage("⚠️ Error: " + error.message, "assistant");
+      }
+    });
+
+    // Allow sending message with Enter key
+    userInput.addEventListener("keypress", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        chatForm.dispatchEvent(new Event("submit"));
+      }
+    });
+  </script>
 </body>
 </html>

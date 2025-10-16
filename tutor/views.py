@@ -14,12 +14,6 @@ from .models import Document, DocumentChunk
 from .serializers import DocumentSerializer
 from . import utils
 
-
-# tutor/views.py
-from django.shortcuts import render
-from django.http import JsonResponse
-from . import utils
-
 def chatlearner_view(request):
     if request.method == "POST":
         try:
@@ -150,7 +144,7 @@ class ProcessLinkView(APIView):
         typ = data.get("type")
         url = data.get("url", "")
         if typ == "youtube":
-            video_id = data.get("videoId") or _extract_youtube_id(url)
+            video_id = data.get("videoId") or utils.extract_youtube_id(url)
             if not video_id:
                 return Response({"error": "No video id found"}, status=status.HTTP_400_BAD_REQUEST)
             try:
@@ -218,14 +212,6 @@ class ProcessLinkView(APIView):
         return Response({"error": "Invalid link type"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# small helper used by ProcessLinkView
-def _extract_youtube_id(url):
-    if not url:
-        return None
-    m = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{6,})", url)
-    return m.group(1) if m else None
-
-
 # Chat endpoint: uses simple retrieval over session documents
 class ChatAPIView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -234,8 +220,18 @@ class ChatAPIView(APIView):
         if not request.session.session_key:
             request.session.save()
         session_key = request.session.session_key
+
         question = (request.data.get("question") or "").strip()
         docs_qs = Document.objects.filter(session_key=session_key)
-        docs = [{"title": d.title, "content": d.content} for d in docs_qs]
-        answer = utils.simple_retrieval_answer(question, docs, top_sentences=3)
-        return Response({"answer": answer})
+        docs = [{"id": d.id, "title": d.title, "content": d.content} for d in docs_qs]
+
+        # Step 1: Retrieve similar document chunks
+        retrieved_chunks = utils.search_similar_chunks(question, docs, top_k=3)
+
+        # Step 2: Ask Groq LLM to explain based on those chunks
+        answer = utils.generate_answer_from_chunks(question, retrieved_chunks)
+
+        return Response({
+            "answer": answer,
+            "sources": [c["document_id"] for c in retrieved_chunks],
+        })
