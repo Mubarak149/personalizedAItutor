@@ -13,6 +13,8 @@ from langchain.schema import Document
 from langchain_groq import ChatGroq
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
+from langchain_community.embeddings import JinaEmbeddings
+
 
 # ✅ Django and project imports
 from rest_framework.exceptions import ValidationError
@@ -25,10 +27,18 @@ try:
     from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
 except Exception:
     YouTubeTranscriptApi = None
+import os
+from dotenv import load_dotenv
 
-# 🧠 LangChain embedding model (wrapped for compatibility)
-EMBEDDING_MODEL = EMBEDDING_MODEL = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+load_dotenv()
 
+
+# Initialize Jina embeddings via LangChain
+EMBEDDING_MODEL = JinaEmbeddings(
+    jina_api_key=os.getenv("JINA_API_KEY"),
+    model="jina-embeddings-v3",  # their latest model
+    dimension=384
+)
 # Initialize Groq model
 LLM = ChatGroq(
     model_name="qwen/qwen3-32b",  # You can change to "mixtral-8x7b" or "gemma-7b-it"

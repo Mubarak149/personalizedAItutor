@@ -30,7 +30,7 @@ class Document(models.Model):
 class DocumentChunk(models.Model):
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="chunks")
     text = models.TextField()
-    embedding = VectorField(dimensions=384)  # ✅ use pgvector type
+    embedding = VectorField(dimensions=768)
     chunk_index = models.PositiveIntegerField(default=0)
 
     def __str__(self):

@@ -37,14 +37,6 @@ def chatlearner_view(request):
     # Render UI (GET)
     return render(request, "chatlearner.html")
 
-def semantic_search_view(request):
-    query = request.GET.get("query")
-    if not query:
-        return JsonResponse({"error": "Missing 'query' parameter"}, status=400)
-    
-    results = utils.search_similar_chunks(query)
-    print(results)
-    return JsonResponse({"query": query, "results": results})
 
 # 🧩 This view handles file uploads (PDFs or text files).
 # It reads, validates, extracts text, chunks content, embeds it, and saves results.

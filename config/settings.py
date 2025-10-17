@@ -7,21 +7,16 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ---------------------------------------------------------------------
+# 🔐 Security Settings
+# ---------------------------------------------------------------------
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-tz)$u8=9l)c(p6vt2z*s5@c9cz101k*h)67%xqg=ub_55(#-mt")
+DEBUG = os.getenv("DEBUG", "True") == "True"
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-tz)$u8=9l)c(p6vt2z*s5@c9cz101k*h)67%xqg=ub_55(#-mt'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
-
-# Application definition
-
+# ---------------------------------------------------------------------
+# 📦 Installed Apps
+# ---------------------------------------------------------------------
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -34,6 +29,9 @@ INSTALLED_APPS = [
     "rest_framework",
 ]
 
+# ---------------------------------------------------------------------
+# ⚙️ Middleware
+# ---------------------------------------------------------------------
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -49,7 +47,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],  # optional: if you have templates folder
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -64,72 +62,75 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+# ---------------------------------------------------------------------
+# 🗄️ Database Configuration (Auto-switch between dev/prod)
+# ---------------------------------------------------------------------
 
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
+ENVIRONMENT = os.getenv("ENV", "development")  # 'development' or 'production'
 
-import os
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DBNAME'),
-        'USER': os.getenv('DBUSER'),
-        'PASSWORD': os.getenv('DBPASS'),
-        'HOST': os.getenv('DBHOST'),
-        'PORT': os.getenv('DBPORT'),
+if ENVIRONMENT == "production":
+    # ✅ Shared server uses MySQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'muubiiby_ai_db',
+            'USER': 'muubiiby_mk',
+            'PASSWORD': 'ad+uP[QSfvNT0d8',
+            'HOST': 'localhost',  # usually 'localhost' in cPanel
+            'PORT': '3306',
+            'OPTIONS': {
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
     }
-}
+else:
+    # ✅ Local dev uses PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DBNAME', 'personalizedAItutor'),
+            'USER': os.getenv('DBUSER', 'postgres'),
+            'PASSWORD': os.getenv('DBPASS', ''),
+            'HOST': os.getenv('DBHOST', '127.0.0.1'),
+            'PORT': os.getenv('DBPORT', '5432'),
+        }
+    }
 
-# add to settings.py (example)
+# ---------------------------------------------------------------------
+# 🧩 File Upload Settings
+# ---------------------------------------------------------------------
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".txt"}
 
-
-# Password validation
-# https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
-
+# ---------------------------------------------------------------------
+# 🔑 Password Validators
+# ---------------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/5.0/topics/i18n/
-
+# ---------------------------------------------------------------------
+# 🌍 Localization
+# ---------------------------------------------------------------------
 LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
-
+TIME_ZONE = 'Africa/Lagos'  # ✅ (Nigeria timezone)
 USE_I18N = True
-
 USE_TZ = True
 
+# ---------------------------------------------------------------------
+# 🖼️ Static and Media Files
+# ---------------------------------------------------------------------
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / "media"
 
-STATIC_URL = 'static/'
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
-
+# ---------------------------------------------------------------------
+# 🧠 REST Framework / AI Settings
+# ---------------------------------------------------------------------
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
