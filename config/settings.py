@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import dj_database_url
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -69,22 +70,32 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ENVIRONMENT = os.getenv("ENV", "development")  # 'development' or 'production'
 
 if ENVIRONMENT == "production":
-    # ✅ Shared server uses MySQL
+    # ✅ Supabase PostgreSQL setup for production
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'muubiiby_ai_db',
-            'USER': 'muubiiby_mk',
-            'PASSWORD': 'ad+uP[QSfvNT0d8',
-            'HOST': 'localhost',  # usually 'localhost' in cPanel
-            'PORT': '3306',
-            'OPTIONS': {
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            },
-        }
+        "default": dj_database_url.parse(
+            os.getenv("DATABASE_URL"),
+            conn_max_age=600,
+            ssl_require=True
+        )
     }
+
+    # ⛔ Old shared MySQL setup (kept for reference)
+    # DATABASES = {
+    #     'default': {
+    #         'ENGINE': 'django.db.backends.mysql',
+    #         'NAME': 'muubiiby_ai_db',
+    #         'USER': 'muubiiby_mk',
+    #         'PASSWORD': 'ad+uP[QSfvNT0d8',
+    #         'HOST': 'localhost',  # usually 'localhost' in cPanel
+    #         'PORT': '3306',
+    #         'OPTIONS': {
+    #             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+    #         },
+    #     }
+    # }
+
 else:
-    # ✅ Local dev uses PostgreSQL
+    # ✅ Local development uses PostgreSQL (localhost)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -133,4 +144,8 @@ MEDIA_ROOT = BASE_DIR / "media"
 # 🧠 REST Framework / AI Settings
 # ---------------------------------------------------------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+JINA_API_KEY=os.getenv("JINA_API_KEY", "")
+SUPABASE_KEY=os.getenv("SUPABASE_KEY", "")
+SUPABASE_URL=os.getenv("SUPABASE_URL", "")
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

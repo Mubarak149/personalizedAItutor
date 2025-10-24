@@ -8,16 +8,13 @@ from rest_framework.response import Response
 from rest_framework import status, parsers, permissions
 from django.db import transaction
 from django.http import JsonResponse
+from .interface import QueryInterface
 
-
-from .models import Document, DocumentChunk
-from .serializers import DocumentSerializer
 from . import utils
 
 def chatlearner_view(request):
     if request.method == "POST":
         try:
-            # ✅ Read JSON body safely
             data = json.loads(request.body.decode("utf-8"))
             query = data.get("question")
         except Exception:
@@ -28,57 +25,48 @@ def chatlearner_view(request):
 
         try:
             results = utils.search_similar_chunks(query)
-            print(results)
             return JsonResponse({"results": results}, status=200)
         except Exception as e:
             print("❌ Error in search_similar_chunks:", e)
             return JsonResponse({"error": str(e)}, status=500)
 
-    # Render UI (GET)
     return render(request, "chatlearner.html")
 
-
-# 🧩 This view handles file uploads (PDFs or text files).
-# It reads, validates, extracts text, chunks content, embeds it, and saves results.
 class DocumentUploadView(APIView):
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
-        # 🔹 Ensure each visitor/session has a unique key (used to link uploaded documents)
         if not request.session.session_key:
             request.session.save()
         session_key = request.session.session_key
 
-        # 🔹 Get uploaded files from request
         files = request.FILES.getlist("files")
         if not files:
             return Response({"error": "No files uploaded"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 🔹 Limit and file type settings
-        MAX_SIZE = getattr(settings, "MAX_UPLOAD_SIZE", 10 * 1024 * 1024)  # default 10MB
+        MAX_SIZE = getattr(settings, "MAX_UPLOAD_SIZE", 10 * 1024 * 1024)
         allowed_ext = {".pdf", ".txt"}
 
-        created = []  # to collect uploaded doc info
+        created = []
+        query_interface = QueryInterface()
 
-        # Use transaction so if one file fails, all roll back
-        with transaction.atomic():
+        # Use transaction only for local development
+        if settings.ENVIRONMENT != "production":
+            transaction_context = transaction.atomic()
+        else:
+            from contextlib import contextmanager
+            @contextmanager
+            def no_transaction():
+                yield
+            transaction_context = no_transaction()
+
+        with transaction_context:
             for f in files:
-                # ✅ Step 1: Validate file (type + size)
-                validation_error = utils.validate_file(f, allowed_ext, MAX_SIZE)
-                if not validation_error:
-                    return validation_error
+                # Validate file
+                utils.validate_file(f, allowed_ext, MAX_SIZE)
 
-                # ✅ Step 2: Save document metadata
-                name = f.name
-                doc = Document.objects.create(
-                    session_key=session_key,
-                    title=name,
-                    source=Document.UPLOAD,
-                    uploaded_file=f
-                )
-
-                # ✅ Step 3: Read content (depends on file type)
+                # Extract text content
                 dot_ext = "." + f.name.split(".")[-1].lower()
                 content = ""
                 if dot_ext == ".pdf":
@@ -90,43 +78,39 @@ class DocumentUploadView(APIView):
                     except Exception:
                         content = ""
 
-                # ✅ Step 4: Split text into smaller chunks
-                chunks = utils.chunk_content(content)
+                # Save the document record
+                doc_data = {
+                    "session_key": session_key,
+                    "title": f.name,
+                    "source": "upload",
+                    "content": content,
+                }
 
-                # ✅ Step 5: Generate embeddings for each chunk
+                # Local → Django ORM
+                # Production → Supabase
+                doc = query_interface.insert("Document", doc_data)
+
+                # Get document ID depending on environment
+                doc_id = doc["id"] if settings.ENVIRONMENT == "production" else doc.id
+
+                # Chunk and embed content
+                chunks = utils.chunk_content(content)
                 embeddings = utils.embed_chunks(chunks)
 
-                # ✅ Step 6: Save chunks & embeddings in DB (optimized)
-                chunk_objs = [
-                    DocumentChunk(
-                        document=doc,
-                        text=chunk,
-                        embedding=emb.tolist(),  # convert NumPy array → Python list
-                        chunk_index=idx
-                    )
-                    for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
-                ]
+                # Save chunks (you can adapt `utils.save_chunks` to use QueryInterface too)
+                utils.save_chunks(doc_id, chunks, embeddings)
 
-                DocumentChunk.objects.bulk_create(chunk_objs, batch_size=100)
-
-                # ✅ Step 7: Save full content
-                doc.content = content
-                doc.save()
-
-                # ✅ Step 8: Prepare response data
+                # Prepare response payload
                 serialized_doc = {
-                    "id": doc.id,
-                    "title": doc.title,
+                    "id": doc_id,
+                    "title": f.name,
                     "chunks_count": len(chunks),
                 }
                 created.append(serialized_doc)
 
-        # ✅ Step 9: Return summary of all uploaded documents
         return Response({"status": "ok", "documents": created}, status=status.HTTP_201_CREATED)
-    
-# POST JSON {type: "youtube"|"website", url: "...", videoId?: "..."}
+
 class ProcessLinkView(APIView):
-    
     def post(self, request, *args, **kwargs):
         if not request.session.session_key:
             request.session.save()
@@ -135,76 +119,73 @@ class ProcessLinkView(APIView):
         data = request.data
         typ = data.get("type")
         url = data.get("url", "")
+        query_interface = QueryInterface()
+
         if typ == "youtube":
             video_id = data.get("videoId") or utils.extract_youtube_id(url)
             if not video_id:
-                return Response({"error": "No video id found"}, status=status.HTTP_400_BAD_REQUEST)
-            try:
-                text = utils.fetch_youtube_transcript(video_id)
-            except Exception as exc:
-                return Response({"error": f"Transcript fetch failed: {str(exc)}"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            doc = Document.objects.create(
-                session_key=session_key,
-                title=f"YouTube:{video_id}",
-                source=Document.YOUTUBE,
-                content=text,
-            )
+                return Response({"error": "No video ID found"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get transcript text
+            text = utils.fetch_youtube_transcript(video_id)
+
+            # Save document record
+            doc_data = {
+                "session_key": session_key,
+                "title": f"YouTube:{video_id}",
+                "source": "youtube",
+                "content": text,
+            }
+            doc = query_interface.insert("Document", doc_data)
+            doc_id = doc["id"] if settings.ENVIRONMENT == "production" else doc.id
+
+            # Split and embed text
             chunks = utils.chunk_content(text, chunk_size=500, chunk_overlap=50)
-
             embeddings = utils.embed_chunks(chunks)
+            utils.save_chunks(doc_id, chunks, embeddings)
 
-            chunk_objs = [
-                    DocumentChunk(
-                        document=doc,
-                        text=chunk,
-                        embedding=emb.tolist(),  # convert NumPy array → Python list
-                        chunk_index=idx
-                    )
-                    for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
-                ]
-
-            DocumentChunk.objects.bulk_create(chunk_objs, batch_size=100)
-
-            doc.save()
-            return Response({"status": "ok", "document": DocumentSerializer(doc).data}, status=status.HTTP_201_CREATED)
+            return Response({
+                "status": "ok",
+                "document": {
+                    "id": doc_id,
+                    "title": doc_data["title"],
+                    "source": doc_data["source"],
+                }
+            }, status=status.HTTP_201_CREATED)
 
         elif typ == "website":
             if not url:
                 return Response({"error": "No URL provided"}, status=status.HTTP_400_BAD_REQUEST)
-            try:
-                text = utils.fetch_website_text(url)
-            except Exception as exc:
-                return Response({"error": f"Website fetch failed: {str(exc)}"}, status=status.HTTP_400_BAD_REQUEST)
-            doc = Document.objects.create(
-                session_key=session_key,
-                title=f"Website:{url}",
-                source=Document.WEBSITE,
-                content=text,
-            )
+
+            # Fetch text from the page
+            text = utils.fetch_website_text(url)
+
+            # Save document record
+            doc_data = {
+                "session_key": session_key,
+                "title": f"Website:{url}",
+                "source": "website",
+                "content": text,
+            }
+            doc = query_interface.insert("Document", doc_data)
+            doc_id = doc["id"] if settings.ENVIRONMENT == "production" else doc.id
+
+            # Split and embed text
             chunks = utils.chunk_content(text, chunk_size=500, chunk_overlap=50)
-            
             embeddings = utils.embed_chunks(chunks)
-     
-            chunk_objs = [
-                    DocumentChunk(
-                        document=doc,
-                        text=chunk,
-                        embedding=emb.tolist(),  # convert NumPy array → Python list
-                        chunk_index=idx
-                    )
-                    for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
-                ]
+            utils.save_chunks(doc_id, chunks, embeddings)
 
-            DocumentChunk.objects.bulk_create(chunk_objs, batch_size=100)
-
-            doc.save()
-            return Response({"status": "ok", "document": DocumentSerializer(doc).data}, status=status.HTTP_201_CREATED)
+            return Response({
+                "status": "ok",
+                "document": {
+                    "id": doc_id,
+                    "title": doc_data["title"],
+                    "source": doc_data["source"],
+                }
+            }, status=status.HTTP_201_CREATED)
 
         return Response({"error": "Invalid link type"}, status=status.HTTP_400_BAD_REQUEST)
 
-
-# Chat endpoint: uses simple retrieval over session documents
 class ChatAPIView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -214,13 +195,14 @@ class ChatAPIView(APIView):
         session_key = request.session.session_key
 
         question = (request.data.get("question") or "").strip()
-        docs_qs = Document.objects.filter(session_key=session_key)
-        docs = [{"id": d.id, "title": d.title, "content": d.content} for d in docs_qs]
+        if not question:
+            return Response({"error": "Please enter a question"}, status=400)
 
-        # Step 1: Retrieve similar document chunks
+        query_interface = QueryInterface()
+        docs = query_interface.select("Document", {"session_key": session_key})
+
+        # Retrieve similar chunks and generate answer
         retrieved_chunks = utils.search_similar_chunks(question, docs, top_k=3)
-
-        # Step 2: Ask Groq LLM to explain based on those chunks
         answer = utils.generate_answer_from_chunks(question, retrieved_chunks)
 
         return Response({

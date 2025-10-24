@@ -1,9 +1,12 @@
+import os
 import re
 import numpy as np
 import tempfile
-import requests
 from bs4 import BeautifulSoup
 from PyPDF2 import PdfReader
+from django.conf import settings
+from rest_framework.exceptions import ValidationError
+from pgvector.django import CosineDistance
 
 # ✅ LangChain imports
 from langchain_community.document_loaders import YoutubeLoader, WebBaseLoader, PyPDFLoader
@@ -15,41 +18,27 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
 from langchain_community.embeddings import JinaEmbeddings
 
+# ✅ Project imports
+from .interface import QueryInterface
 
-# ✅ Django and project imports
-from rest_framework.exceptions import ValidationError
-from pgvector.django import CosineDistance
-from .models import DocumentChunk
+# --- Initialize helpers ---
+query_interface = QueryInterface()
 
-# ✅ Fallback imports for direct transcript
-try:
-    from youtube_transcript_api import YouTubeTranscriptApi
-    from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
-except Exception:
-    YouTubeTranscriptApi = None
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-# Initialize Jina embeddings via LangChain
+# --- Initialize embeddings and LLM ---
 EMBEDDING_MODEL = JinaEmbeddings(
     jina_api_key=os.getenv("JINA_API_KEY"),
-    model="jina-embeddings-v3",  # their latest model
+    model="jina-embeddings-v3",
     dimension=384
 )
-# Initialize Groq model
+
 LLM = ChatGroq(
-    model_name="qwen/qwen3-32b",  # You can change to "mixtral-8x7b" or "gemma-7b-it"
+    model_name="qwen/qwen3-32b",
     temperature=0.4,
 )
 
+# --- AI-related functions ---
 def generate_answer_from_chunks(question, chunks):
-    # Combine text from the most relevant chunks
     context = "\n\n".join([c["text"] for c in chunks])
-
-    # Prompt template for educational-style answers
     prompt_template = ChatPromptTemplate.from_template("""
         You are an AI tutor that explains complex ideas in simple, easy-to-understand language.
 
@@ -63,14 +52,12 @@ def generate_answer_from_chunks(question, chunks):
         {question}
 
         Explain as if you are teaching a beginner student:
-        """)
-
+    """)
     chain = LLMChain(llm=LLM, prompt=prompt_template)
     response = chain.run({"context": context, "question": question})
     return response.strip()
 
-
-# ✅ Validate uploaded file extension and size
+# --- File validation and parsing ---
 def validate_file(file_obj, allowed_ext=None, max_size=None):
     name = file_obj.name
     ext = (name.rsplit(".", 1)[-1] if "." in name else "").lower()
@@ -89,8 +76,6 @@ def validate_file(file_obj, allowed_ext=None, max_size=None):
 
     return True
 
-
-# ✅ Extract text from PDF files (via LangChain loader)
 def parse_pdf_file(file_obj):
     with tempfile.NamedTemporaryFile(delete=True, suffix=".pdf") as tmp:
         for chunk in file_obj.chunks():
@@ -103,57 +88,7 @@ def parse_pdf_file(file_obj):
         except Exception:
             return ""
 
-
-# ✅ Fetch YouTube transcript (LangChain style)
-def fetch_youtube_transcript(video_id: str) -> str:
-    """
-    Fetch and combine transcript text for a given YouTube video ID.
-    Uses LangChain YoutubeLoader first, fallback to direct API.
-    """
-    try:
-        # ✅ Try LangChain YouTube loader first
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        loader = YoutubeLoader.from_youtube_url(video_url, add_video_info=True)
-        docs = loader.load()
-        return "\n".join([d.page_content for d in docs])
-
-    except Exception:
-        # ✅ Fallback to youtube_transcript_api
-        if YouTubeTranscriptApi is None:
-            return "⚠️ Transcript API not available."
-        try:
-            ytt_api = YouTubeTranscriptApi()
-            transcript_obj = ytt_api.fetch(video_id)
-            return " ".join([snippet.text for snippet in transcript_obj.snippets])
-        except TranscriptsDisabled:
-            return "⚠️ Transcripts are disabled for this video."
-        except NoTranscriptFound:
-            return "⚠️ No transcript available for this video."
-        except VideoUnavailable:
-            return "⚠️ The requested video is unavailable."
-        except Exception as e:
-            return f"⚠️ Error fetching transcript: {str(e)}"
-
-
-# ✅ Fetch plain text from website (LangChain style)
-def fetch_website_text(url, max_chars=30000):
-    try:
-        loader = WebBaseLoader(url)
-        docs = loader.load()
-        text = "\n".join([d.page_content for d in docs])
-        return text[:max_chars]
-    except Exception:
-        # Fallback to manual BeautifulSoup method
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "Linux Debian/1.0"})
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
-            tag.decompose()
-        texts = list(soup.stripped_strings)
-        return " ".join(texts)[:max_chars]
-
-
-# ✅ Split long text into smaller chunks (LangChain splitter)
+# --- Chunking and embeddings ---
 def chunk_content(text, chunk_size=1000, chunk_overlap=100):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -163,41 +98,92 @@ def chunk_content(text, chunk_size=1000, chunk_overlap=100):
     )
     return splitter.split_text(text)
 
-
-# ✅ Generate embeddings using LangChain
 def embed_chunks(chunks):
     if not chunks:
         return np.array([])
     return np.array(EMBEDDING_MODEL.embed_documents(chunks))
 
+# --- Database interactions via QueryInterface ---
+def save_document(session_key, title, source, content="", uploaded_file=None):
+    """Save a document using QueryInterface."""
+    data = {
+        "session_key": session_key,
+        "title": title,
+        "source": source,
+        "content": content,
+    }
 
-# ✅ Store and retrieve embeddings (pgvector search)
-def search_similar_chunks(query: str, docs, top_k=5):
-    query_embedding = EMBEDDING_MODEL.embed_query(query)
-    doc_ids = [d["id"] for d in docs]
+    if settings.ENVIRONMENT != "production":
+        # Only store uploaded file locally
+        from .models import Document
+        doc = Document.objects.create(**data, uploaded_file=uploaded_file)
+        return doc
+    else:
+        return query_interface.insert("Document", data)
 
-    similar_chunks = (
-        DocumentChunk.objects
-        .filter(document_id__in=doc_ids)
-        .annotate(distance=CosineDistance('embedding', query_embedding))
-        .order_by('distance')[:top_k]
-    )
-
-    return [
+def save_chunks(document_id, chunks, embeddings):
+    """Save document chunks using QueryInterface."""
+    records = [
         {
-            "text": chunk.text,
-            "distance": float(chunk.distance),
-            "document_id": chunk.document_id,
+            "document_id": document_id,
+            "text": chunk,
+            "embedding": emb.tolist(),
+            "chunk_index": idx,
         }
-        for chunk in similar_chunks
+        for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
     ]
 
+    query_interface.bulk_insert("DocumentChunk", records)
+    return records
 
+def search_similar_chunks(query: str, docs=None, top_k=5):
+    """Search similar chunks (vector similarity) using Supabase in prod, Django locally."""
+    query_embedding = EMBEDDING_MODEL.embed_query(query)
+    doc_ids = [d["id"] for d in docs] if docs else []
 
-# small helper used by ProcessLinkView
+    if settings.ENVIRONMENT == "production":
+        # If you plan to add Supabase vector search later
+        results = query_interface.select("DocumentChunk", {"document_id": doc_ids})
+        # (You could extend QueryInterface with vector filtering if needed)
+        return results[:top_k]
+    else:
+        from .models import DocumentChunk
+        chunks = (
+            DocumentChunk.objects
+            .filter(document_id__in=doc_ids)
+            .annotate(distance=CosineDistance("embedding", query_embedding))
+            .order_by("distance")[:top_k]
+        )
+        return [
+            {
+                "text": c.text,
+                "distance": float(c.distance),
+                "document_id": c.document_id,
+            }
+            for c in chunks
+        ]
+
+# --- External source utilities ---
+def fetch_youtube_transcript(video_id: str) -> str:
+    try:
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+        loader = YoutubeLoader.from_youtube_url(video_url, add_video_info=True)
+        docs = loader.load()
+        return "\n".join([d.page_content for d in docs])
+    except Exception as e:
+        return f"⚠️ Error fetching transcript: {str(e)}"
+
+def fetch_website_text(url, max_chars=30000):
+    try:
+        loader = WebBaseLoader(url)
+        docs = loader.load()
+        text = "\n".join([d.page_content for d in docs])
+        return text[:max_chars]
+    except Exception as e:
+        return f"⚠️ Error fetching website: {str(e)}"
+
 def extract_youtube_id(url):
     if not url:
         return None
     m = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{6,})", url)
     return m.group(1) if m else None
-
