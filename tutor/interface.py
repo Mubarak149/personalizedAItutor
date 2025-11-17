@@ -21,25 +21,28 @@ class QueryInterface:
                 "Accept": "application/json",
             }
 
-    # 🔹 Insert one record
+        # 🔹 Insert one record
     def insert(self, model_name: str, data: dict):
         if self.env == "production":
-            response = self.supabase.table(model_name).insert(data).execute()
+            # Supabase table names are lowercase by default
+            table_name = model_name.lower()
+            response = self.supabase.table(table_name).insert(data).execute()
             return response.data
         else:
             model = self._get_model(model_name)
             return model.objects.create(**data)
 
-    # 🔹 Bulk insert
     def bulk_insert(self, model_name: str, records: list[dict]):
         if self.env == "production":
-            response = self.supabase.table(model_name).insert(records).execute()
+            table_name = model_name.lower()
+            response = self.supabase.table(table_name).insert(records).execute()
             return response.data
         else:
             model = self._get_model(model_name)
             objs = [model(**r) for r in records]
             model.objects.bulk_create(objs)
             return objs
+
 
     # 🔹 Select (fetch)
     def select(self, model_name: str, filters: dict = None):
@@ -127,4 +130,7 @@ class QueryInterface:
     def _get_model(self, model_name: str):
         from django.apps import apps
         app_label = getattr(settings, "DEFAULT_APP_LABEL", "tutor")
-        return apps.get_model(app_label, model_name)
+        # Convert camel-case to snake_case for Supabase compatibility if needed
+        normalized_name = model_name.lower()
+        return apps.get_model(app_label, normalized_name)
+

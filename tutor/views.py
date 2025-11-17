@@ -88,10 +88,14 @@ class DocumentUploadView(APIView):
 
                 # Local → Django ORM
                 # Production → Supabase
-                doc = query_interface.insert("Document", doc_data)
+                doc = query_interface.insert("document", doc_data)
 
                 # Get document ID depending on environment
-                doc_id = doc["id"] if settings.ENVIRONMENT == "production" else doc.id
+                if settings.ENVIRONMENT == "production":
+                    doc_id = doc[0]["id"]   # Supabase returns a list
+                else:
+                    doc_id = doc.id         # Django returns an object
+
 
                 # Chunk and embed content
                 chunks = utils.chunk_content(content)
@@ -136,7 +140,7 @@ class ProcessLinkView(APIView):
                 "source": "youtube",
                 "content": text,
             }
-            doc = query_interface.insert("Document", doc_data)
+            doc = query_interface.insert("document", doc_data)
             doc_id = doc["id"] if settings.ENVIRONMENT == "production" else doc.id
 
             # Split and embed text
@@ -167,7 +171,7 @@ class ProcessLinkView(APIView):
                 "source": "website",
                 "content": text,
             }
-            doc = query_interface.insert("Document", doc_data)
+            doc = query_interface.insert("document", doc_data)
             doc_id = doc["id"] if settings.ENVIRONMENT == "production" else doc.id
 
             # Split and embed text
@@ -199,7 +203,7 @@ class ChatAPIView(APIView):
             return Response({"error": "Please enter a question"}, status=400)
 
         query_interface = QueryInterface()
-        docs = query_interface.select("Document", {"session_key": session_key})
+        docs = query_interface.select("document", {"session_key": session_key})
 
         # Retrieve similar chunks and generate answer
         retrieved_chunks = utils.search_similar_chunks(question, docs, top_k=3)

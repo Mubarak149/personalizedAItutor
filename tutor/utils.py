@@ -122,7 +122,9 @@ def save_document(session_key, title, source, content="", uploaded_file=None):
         return query_interface.insert("Document", data)
 
 def save_chunks(document_id, chunks, embeddings):
-    """Save document chunks using QueryInterface."""
+    """Save chunks depending on environment (local ORM vs Supabase)."""
+
+    # Prepare the records (same for both environments)
     records = [
         {
             "document_id": document_id,
@@ -133,8 +135,15 @@ def save_chunks(document_id, chunks, embeddings):
         for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
     ]
 
-    query_interface.bulk_insert("DocumentChunk", records)
+    # Pick correct table name depending on environment
+    if settings.ENVIRONMENT == "production":
+        table_name = "document_chunk"      # Supabase table name
+    else:
+        table_name = "DocumentChunk"       # Django model name
+
+    query_interface.bulk_insert(table_name, records)
     return records
+
 
 def search_similar_chunks(query: str, docs=None, top_k=5):
     """Search similar chunks (vector similarity) using Supabase in prod, Django locally."""
@@ -143,7 +152,7 @@ def search_similar_chunks(query: str, docs=None, top_k=5):
 
     if settings.ENVIRONMENT == "production":
         # If you plan to add Supabase vector search later
-        results = query_interface.select("DocumentChunk", {"document_id": doc_ids})
+        results = query_interface.select("document_chunk", {"document_id": doc_ids})
         # (You could extend QueryInterface with vector filtering if needed)
         return results[:top_k]
     else:

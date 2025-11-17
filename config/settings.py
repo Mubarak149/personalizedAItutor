@@ -69,30 +69,20 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 ENVIRONMENT = os.getenv("ENV", "development")  # 'development' or 'production'
 
-if ENVIRONMENT == "production":
-    # ✅ Supabase PostgreSQL setup for production
+if not (ENVIRONMENT == "production"):
     DATABASES = {
-        "default": dj_database_url.parse(
-            os.getenv("DATABASE_URL"),
-            conn_max_age=600,
-            ssl_require=True
-        )
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'muubiiby_ai_db',
+            'USER': 'muubiiby_mk',
+            'PASSWORD': 'ad+uP[QSfvNT0d8',
+            'HOST': 'localhost',  # usually 'localhost' in cPanel
+            'PORT': '3306',
+            'OPTIONS': {
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
     }
-
-    # ⛔ Old shared MySQL setup (kept for reference)
-    # DATABASES = {
-    #     'default': {
-    #         'ENGINE': 'django.db.backends.mysql',
-    #         'NAME': 'muubiiby_ai_db',
-    #         'USER': 'muubiiby_mk',
-    #         'PASSWORD': 'ad+uP[QSfvNT0d8',
-    #         'HOST': 'localhost',  # usually 'localhost' in cPanel
-    #         'PORT': '3306',
-    #         'OPTIONS': {
-    #             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-    #         },
-    #     }
-    # }
 
 else:
     # ✅ Local development uses PostgreSQL (localhost)
