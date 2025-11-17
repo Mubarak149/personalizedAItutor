@@ -47,16 +47,23 @@ class QueryInterface:
     # 🔹 Select (fetch)
     def select(self, model_name: str, filters: dict = None):
         if self.env == "production":
-            query = self.supabase.table(model_name).select("*")
+            table_name = model_name.lower()
+            query = self.supabase.table(table_name).select("*")
             if filters:
                 for key, value in filters.items():
-                    query = query.eq(key, value)
+                    if isinstance(value, list):
+                        # Use `in.` for lists
+                        value_str = ",".join(map(str, value))
+                        query = query.in_(key, value)
+                    else:
+                        query = query.eq(key, value)
             response = query.execute()
             return response.data
         else:
             model = self._get_model(model_name)
             qs = model.objects.filter(**filters) if filters else model.objects.all()
             return list(qs.values())
+
 
     # 🔹 Update
     def update(self, model_name: str, filters: dict, data: dict):
