@@ -1,5 +1,7 @@
 import os
 import re
+import logging
+import json
 import numpy as np
 import tempfile
 from bs4 import BeautifulSoup
@@ -8,6 +10,8 @@ from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from pgvector.django import CosineDistance
 
+
+logger = logging.getLogger("user_activity")
 # ✅ LangChain imports
 from langchain_community.document_loaders import YoutubeLoader, WebBaseLoader, PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -196,3 +200,19 @@ def extract_youtube_id(url):
         return None
     m = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{6,})", url)
     return m.group(1) if m else None
+
+
+
+def log_user_action(session_key, action_type, details=None):
+    """
+    Logs user activity in a structured way.
+    - session_key: identifies the user/session
+    - action_type: e.g., 'upload_document', 'ask_question', 'process_youtube'
+    - details: dict with extra info (like file names, question text, document ids)
+    """
+    entry = {
+        "session_key": session_key,
+        "action": action_type,
+        "details": details or {},
+    }
+    logger.info(json.dumps(entry))

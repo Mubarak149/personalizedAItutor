@@ -37,3 +37,5 @@ test.py
 .env
 uploads/
 .DS_Store
+# Ignore logs folder
+.logs/
