@@ -217,7 +217,7 @@ class ChatAPIView(APIView):
             query_interface = QueryInterface()
             docs = query_interface.select("document", {"session_key": session_key})
 
-            retrieved_chunks = utils.search_similar_chunks(question, docs, top_k=3)
+            retrieved_chunks = utils.search_similar_chunks(question, docs, top_k=30)
             answer = utils.generate_answer_from_chunks(question, retrieved_chunks)
 
             log_user_action(
