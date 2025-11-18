@@ -9,9 +9,11 @@ from PyPDF2 import PdfReader
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from pgvector.django import CosineDistance
+from pytubefix import YouTube
 
-
+# ✅ Logging setup
 logger = logging.getLogger("user_activity")
+
 # ✅ LangChain imports
 from langchain_community.document_loaders import YoutubeLoader, WebBaseLoader, PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -177,14 +179,52 @@ def search_similar_chunks(query: str, docs=None, top_k=5):
         ]
 
 # --- External source utilities ---
-def fetch_youtube_transcript(video_id: str) -> str:
+
+def fetch_youtube_info(video_url: str) -> dict:
+    """
+    Fetches YouTube video info including title, description, thumbnail,
+    channel, length, publish date, and transcript as plain text.
+    """
     try:
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        loader = YoutubeLoader.from_youtube_url(video_url, add_video_info=True)
-        docs = loader.load()
-        return "\n".join([d.page_content for d in docs])
+        yt = YouTube(video_url)
+
+        # Basic video info
+        title = yt.title
+        description = yt.description
+        thumbnail = yt.thumbnail_url
+        channel = yt.author
+        length = yt.length
+        publish_date = yt.publish_date
+
+        # Transcript / captions
+        transcript = ""
+        if yt.captions:
+            # Auto English captions 'a.en'
+            caption = yt.captions.get('a.en') or yt.captions.get('en')
+            if caption:
+                srt_text = caption.generate_srt_captions()
+                # Remove SRT numbers and timestamps
+                transcript = re.sub(r"\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n", "", srt_text)
+                # Remove extra newlines
+                transcript = "\n".join([line.strip() for line in transcript.splitlines() if line.strip()])
+            else:
+                transcript = "No English subtitles available."
+        else:
+            transcript = "No subtitles found."
+
+        return {
+            "title": title,
+            "description": description,
+            "thumbnail": thumbnail,
+            "channel": channel,
+            "length_seconds": length,
+            "publish_date": str(publish_date),
+            "transcript": transcript
+        }
+
     except Exception as e:
-        return f"⚠️ Error fetching transcript: {str(e)}"
+        return {"error": str(e)}
+
 
 def fetch_website_text(url, max_chars=30000):
     try:

@@ -133,25 +133,26 @@ class ProcessLinkView(APIView):
         typ = data.get("type")
         url = data.get("url", "")
         query_interface = QueryInterface()
-
         try:
             if typ == "youtube":
                 video_id = data.get("videoId") or utils.extract_youtube_id(url)
                 if not video_id:
                     return Response({"error": "No video ID found"}, status=status.HTTP_400_BAD_REQUEST)
-
-                text = utils.fetch_youtube_transcript(video_id)
+                
+                yt_video_data =  utils.fetch_youtube_info(url)
+                text = yt_video_data["transcript"]
                 doc_data = {
                     "session_key": session_key,
-                    "title": f"YouTube:{video_id}",
+                    "title": yt_video_data['title'],
                     "source": "youtube",
                     "content": text,
                 }
                 doc = query_interface.insert("document", doc_data)
-                doc_id = doc["id"] if settings.ENVIRONMENT == "production" else doc.id
+                doc_id = doc[0]["id"] if settings.ENVIRONMENT == "production" else doc.id
 
                 chunks = utils.chunk_content(text, chunk_size=500, chunk_overlap=50)
                 embeddings = utils.embed_chunks(chunks)
+                
                 utils.save_chunks(doc_id, chunks, embeddings)
 
                 log_user_action(
