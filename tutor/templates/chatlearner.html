@@ -55,6 +55,47 @@
       font-size: 0.9rem;
     }
     
+    /* Document list styling */
+    .documents-section {
+      padding: 15px 20px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #eaeaea;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    
+    .documents-section h6 {
+      margin-bottom: 10px;
+      color: var(--dark-color);
+      font-weight: 600;
+    }
+    
+    .document-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .document-item {
+      display: flex;
+      align-items: center;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 20px;
+      border: 1px solid #ddd;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    
+    .document-item:hover {
+      border-color: var(--primary-color);
+      box-shadow: 0 2px 5px rgba(67, 97, 238, 0.1);
+    }
+    
+    .document-item input[type="checkbox"] {
+      margin-right: 8px;
+    }
+    
     #chat-box {
       flex: 1;
       overflow-y: auto;
@@ -83,6 +124,7 @@
       border-radius: 18px;
       position: relative;
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      word-wrap: break-word;
     }
     
     .message.user .message-content {
@@ -171,11 +213,18 @@
       align-items: center;
       justify-content: center;
       transition: all 0.3s;
+      cursor: pointer;
     }
     
     .send-btn:hover {
       background: var(--secondary-color);
       transform: scale(1.05);
+    }
+    
+    .send-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
     }
     
     .upload-section {
@@ -253,6 +302,15 @@
       .upload-options {
         flex-direction: column;
       }
+      
+      .document-list {
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .document-item {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -264,7 +322,22 @@
         <h3><i class="fas fa-graduation-cap me-2"></i>ChatLearner</h3>
         <p>Upload documents, paste YouTube links, or add websites to learn from them</p>
       </div>
-      
+
+      <!-- Document Selection Section -->
+      <div class="documents-section">
+        <h6>Select documents to query:</h6>
+        <div class="document-list" id="document-list">
+          {% for doc in datas %}
+            <div class="document-item">
+              <input type="checkbox" class="doc-checkbox" value="{{ doc.id }}" id="doc-{{ doc.id }}">
+              <label for="doc-{{ doc.id }}">{{ doc.title }}</label>
+            </div>
+          {% empty %}
+            <div class="text-muted">No documents available. Upload some to get started.</div>
+          {% endfor %}
+        </div>
+      </div>
+
       <!-- Chat Messages Area -->
       <div id="chat-box">
         <div class="message assistant">
@@ -279,8 +352,8 @@
         <form id="chat-form">
           {% csrf_token %}
           <div class="input-group">
-            <input type="text" id="user-input" class="form-control" placeholder="Type your question here...">
-            <button class="send-btn" type="submit">
+            <input type="text" id="user-input" class="form-control" placeholder="Type your question here..." aria-label="Type your question">
+            <button class="send-btn" type="submit" aria-label="Send message">
               <i class="fas fa-paper-plane"></i>
             </button>
           </div>
@@ -291,24 +364,22 @@
       <div class="upload-section">
         <div class="upload-options">
           <!-- Document Upload -->
-          <div class="upload-option" id="document-upload-trigger">
+          <div class="upload-option" id="document-upload-trigger" role="button" tabindex="0" aria-label="Upload documents">
             <i class="fas fa-file-upload"></i>
             <span>Upload Documents</span>
-            <input type="file" id="file-input" class="hidden-input" multiple>
+            <input type="file" id="file-input" class="hidden-input" multiple accept=".pdf,.doc,.docx,.txt,.ppt,.pptx">
           </div>
           
           <!-- YouTube Link -->
-          <div class="upload-option" id="youtube-trigger">
+          <div class="upload-option" id="youtube-trigger" role="button" tabindex="0" aria-label="Add YouTube link">
             <i class="fab fa-youtube"></i>
             <span>YouTube Link</span>
-            <input type="url" id="youtube-link" class="hidden-input" placeholder="https://youtube.com/watch?v=...">
           </div>
           
           <!-- Website URL -->
-          <div class="upload-option" id="website-trigger">
+          <div class="upload-option" id="website-trigger" role="button" tabindex="0" aria-label="Add website URL">
             <i class="fas fa-globe"></i>
             <span>Website URL</span>
-            <input type="url" id="website-link" class="hidden-input" placeholder="https://example.com">
           </div>
         </div>
       </div>
@@ -316,15 +387,15 @@
   </div>
 
   <!-- Modal for URL Input -->
-  <div class="modal fade" id="urlModal" tabindex="-1">
+  <div class="modal fade" id="urlModal" tabindex="-1" aria-labelledby="urlModalTitle" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="urlModalTitle">Add Link</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <input type="url" id="modal-url-input" class="form-control" placeholder="Paste your link here...">
+          <input type="url" id="modal-url-input" class="form-control" placeholder="Paste your link here..." aria-label="URL input">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -342,17 +413,18 @@
     const chatForm = document.getElementById("chat-form");
     const userInput = document.getElementById("user-input");
     const fileInput = document.getElementById("file-input");
-    const youtubeInput = document.getElementById("youtube-link");
-    const websiteInput = document.getElementById("website-link");
     const documentUploadTrigger = document.getElementById("document-upload-trigger");
     const youtubeTrigger = document.getElementById("youtube-trigger");
     const websiteTrigger = document.getElementById("website-trigger");
     const urlModal = new bootstrap.Modal(document.getElementById('urlModal'));
     const modalUrlInput = document.getElementById("modal-url-input");
     const processUrlBtn = document.getElementById("process-url-btn");
+    const sendBtn = document.querySelector('.send-btn');
     
     // Track current URL type for modal processing
     let currentUrlType = "";
+    // Track if we're currently processing a request
+    let isProcessing = false;
 
     // Function to get CSRF token for secure communication with Django backend
     function getCSRFToken() {
@@ -372,7 +444,6 @@
       let cleanText = text.replace(/<think>.*?<\/think>/gs, ""); // remove think tags if present
       contentDiv.innerHTML = marked.parse(cleanText);
 
-      
       messageDiv.appendChild(contentDiv);
       chatBox.appendChild(messageDiv);
       
@@ -388,6 +459,7 @@
       
       const contentDiv = document.createElement("div");
       contentDiv.classList.add("typing-indicator");
+      contentDiv.setAttribute("aria-label", "Assistant is typing");
       
       // Add animated dots
       for (let i = 0; i < 3; i++) {
@@ -401,6 +473,18 @@
       chatBox.scrollTop = chatBox.scrollHeight;
       
       return typingDiv;
+    }
+
+    // Function to get selected document IDs
+    function getSelectedDocuments() {
+      const selected = [];
+      const checkboxes = document.querySelectorAll(".doc-checkbox:checked");
+
+      checkboxes.forEach(cb => {
+        selected.push(parseInt(cb.value));
+      });
+
+      return selected;
     }
 
     // Function to remove typing indicator
@@ -443,7 +527,11 @@
 
     // Process a link (YouTube or website)
     async function processLink(url, type) {
+      // Show processing message
       addMessage(`🔗 Processing ${type} link...`, "assistant");
+      
+      // Disable UI during processing
+      setProcessingState(true);
 
       try {
         const response = await fetch("http://127.0.0.1:8000/api/documents/process-link/", {
@@ -464,6 +552,23 @@
         }
       } catch (error) {
         addMessage(`⚠️ Error processing ${type}: ${error.message}`, "assistant");
+      } finally {
+        // Re-enable UI
+        setProcessingState(false);
+      }
+    }
+
+    // Set processing state to disable/enable UI elements
+    function setProcessingState(processing) {
+      isProcessing = processing;
+      userInput.disabled = processing;
+      sendBtn.disabled = processing;
+      
+      // Update button appearance
+      if (processing) {
+        sendBtn.style.opacity = "0.6";
+      } else {
+        sendBtn.style.opacity = "1";
       }
     }
 
@@ -471,23 +576,33 @@
 
     // Document upload trigger
     documentUploadTrigger.addEventListener("click", () => {
-      fileInput.click();
+      if (!isProcessing) {
+        fileInput.click();
+      }
     });
 
     // YouTube link trigger
     youtubeTrigger.addEventListener("click", () => {
-      currentUrlType = "youtube";
-      modalUrlInput.placeholder = "Paste YouTube link here...";
-      document.getElementById("urlModalTitle").textContent = "Add YouTube Link";
-      urlModal.show();
+      if (!isProcessing) {
+        currentUrlType = "youtube";
+        modalUrlInput.placeholder = "Paste YouTube link here...";
+        document.getElementById("urlModalTitle").textContent = "Add YouTube Link";
+        urlModal.show();
+        // Focus on input when modal is shown
+        setTimeout(() => modalUrlInput.focus(), 500);
+      }
     });
 
     // Website link trigger
     websiteTrigger.addEventListener("click", () => {
-      currentUrlType = "website";
-      modalUrlInput.placeholder = "Paste website URL here...";
-      document.getElementById("urlModalTitle").textContent = "Add Website URL";
-      urlModal.show();
+      if (!isProcessing) {
+        currentUrlType = "website";
+        modalUrlInput.placeholder = "Paste website URL here...";
+        document.getElementById("urlModalTitle").textContent = "Add Website URL";
+        urlModal.show();
+        // Focus on input when modal is shown
+        setTimeout(() => modalUrlInput.focus(), 500);
+      }
     });
 
     // Process URL from modal
@@ -497,6 +612,14 @@
         processLink(url, currentUrlType);
         urlModal.hide();
         modalUrlInput.value = "";
+      }
+    });
+
+    // Handle Enter key in modal URL input
+    modalUrlInput.addEventListener("keypress", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        processUrlBtn.click();
       }
     });
 
@@ -512,6 +635,9 @@
         formData.append("files", file);
       }
 
+      // Disable UI during upload
+      setProcessingState(true);
+
       try {
         const response = await fetch("http://127.0.0.1:8000/api/documents/upload/", {
           method: "POST",
@@ -523,11 +649,17 @@
 
         if (response.ok) {
           showStatusMessage(`✅ Uploaded ${data.documents.length} file(s) successfully.`);
+          // Optionally refresh the document list here
         } else {
           showStatusMessage(`⚠️ Upload failed: ${data.error || JSON.stringify(data)}`, true);
         }
       } catch (error) {
         showStatusMessage("⚠️ Error during upload: " + error.message, true);
+      } finally {
+        // Re-enable UI
+        setProcessingState(false);
+        // Clear file input
+        fileInput.value = "";
       }
     });
 
@@ -535,7 +667,7 @@
     chatForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const text = userInput.value.trim();
-      if (!text) return;
+      if (!text || isProcessing) return;
 
       // Add user message to chat
       addMessage(text, "user");
@@ -543,6 +675,9 @@
 
       // Show typing indicator
       showTypingIndicator();
+      
+      // Disable UI during processing
+      setProcessingState(true);
 
       try {
         const response = await fetch("http://127.0.0.1:8000/api/chat/", {
@@ -551,7 +686,10 @@
             "X-CSRFToken": csrftoken, 
             "Content-Type": "application/json" 
           },
-          body: JSON.stringify({ question: text })
+          body: JSON.stringify({
+            question: text,
+            selected_ids: getSelectedDocuments()
+          })
         });
 
         const data = await response.json();
@@ -567,6 +705,9 @@
         
         // Show error message
         addMessage("⚠️ Error: " + error.message, "assistant");
+      } finally {
+        // Re-enable UI
+        setProcessingState(false);
       }
     });
 
@@ -576,6 +717,16 @@
         event.preventDefault();
         chatForm.dispatchEvent(new Event("submit"));
       }
+    });
+
+    // Keyboard accessibility for upload options
+    [documentUploadTrigger, youtubeTrigger, websiteTrigger].forEach(element => {
+      element.addEventListener("keypress", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          element.click();
+        }
+      });
     });
   </script>
 </body>
