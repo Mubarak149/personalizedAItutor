@@ -55,19 +55,60 @@
       font-size: 0.9rem;
     }
     
-    /* Document list styling */
-    .documents-section {
-      padding: 15px 20px;
+    /* Documents section wrapper */
+    .documents-wrapper {
       background: #f8f9fa;
       border-bottom: 1px solid #eaeaea;
-      max-height: 150px;
-      overflow-y: auto;
     }
     
-    .documents-section h6 {
-      margin-bottom: 10px;
+    /* Documents header - always visible */
+    .documents-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      background: #f8f9fa;
+    }
+    
+    .documents-header h6 {
+      margin: 0;
       color: var(--dark-color);
       font-weight: 600;
+    }
+    
+    .toggle-documents-btn {
+      background: none;
+      border: none;
+      color: var(--primary-color);
+      cursor: pointer;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+      padding: 5px 10px;
+      border-radius: 15px;
+    }
+    
+    .toggle-documents-btn:hover {
+      background: rgba(67, 97, 238, 0.1);
+      color: var(--secondary-color);
+    }
+    
+    /* Document list styling - collapsible */
+    .documents-section {
+      padding: 0 20px 15px;
+      background: #f8f9fa;
+      max-height: 150px;
+      overflow-y: auto;
+      transition: all 0.3s ease;
+    }
+    
+    .documents-section.collapsed {
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      overflow: hidden;
     }
     
     .document-list {
@@ -101,6 +142,7 @@
       overflow-y: auto;
       padding: 20px;
       background: #fafbff;
+      transition: all 0.3s ease;
     }
     
     .message {
@@ -323,18 +365,29 @@
         <p>Upload documents, paste YouTube links, or add websites to learn from them</p>
       </div>
 
-      <!-- Document Selection Section -->
-      <div class="documents-section">
-        <h6>Select documents to query:</h6>
-        <div class="document-list" id="document-list">
-          {% for doc in datas %}
-            <div class="document-item">
-              <input type="checkbox" class="doc-checkbox" value="{{ doc.id }}" id="doc-{{ doc.id }}">
-              <label for="doc-{{ doc.id }}">{{ doc.title }}</label>
-            </div>
-          {% empty %}
-            <div class="text-muted">No documents available. Upload some to get started.</div>
-          {% endfor %}
+      <!-- Documents Wrapper - Always visible header with collapsible content -->
+      <div class="documents-wrapper">
+        <!-- Documents Header - Always visible -->
+        <div class="documents-header">
+          <h6>Select documents to query:</h6>
+          <button class="toggle-documents-btn" id="toggle-documents-btn" aria-label="Toggle documents visibility">
+            <span id="toggle-text">Hide</span>
+            <i class="fas fa-chevron-up" id="toggle-icon"></i>
+          </button>
+        </div>
+        
+        <!-- Documents Section - Collapsible content -->
+        <div class="documents-section" id="documents-section">
+          <div class="document-list" id="document-list">
+            {% for doc in datas %}
+              <div class="document-item">
+                <input type="checkbox" class="doc-checkbox" value="{{ doc.id }}" id="doc-{{ doc.id }}">
+                <label for="doc-{{ doc.id }}">{{ doc.title }}</label>
+              </div>
+            {% empty %}
+              <div class="text-muted">No documents available. Upload some to get started.</div>
+            {% endfor %}
+          </div>
         </div>
       </div>
 
@@ -420,11 +473,17 @@
     const modalUrlInput = document.getElementById("modal-url-input");
     const processUrlBtn = document.getElementById("process-url-btn");
     const sendBtn = document.querySelector('.send-btn');
+    const documentsSection = document.getElementById("documents-section");
+    const toggleDocumentsBtn = document.getElementById("toggle-documents-btn");
+    const toggleText = document.getElementById("toggle-text");
+    const toggleIcon = document.getElementById("toggle-icon");
     
     // Track current URL type for modal processing
     let currentUrlType = "";
     // Track if we're currently processing a request
     let isProcessing = false;
+    // Track documents section visibility
+    let documentsVisible = true;
 
     // Function to get CSRF token for secure communication with Django backend
     function getCSRFToken() {
@@ -432,6 +491,25 @@
     }
 
     const csrftoken = getCSRFToken();
+
+    // Function to toggle documents section visibility
+    function toggleDocuments() {
+      documentsVisible = !documentsVisible;
+      
+      if (documentsVisible) {
+        // Show documents section
+        documentsSection.classList.remove("collapsed");
+        toggleText.textContent = "Hide";
+        toggleIcon.className = "fas fa-chevron-up";
+        toggleDocumentsBtn.setAttribute("aria-label", "Hide documents");
+      } else {
+        // Hide documents section
+        documentsSection.classList.add("collapsed");
+        toggleText.textContent = "Show";
+        toggleIcon.className = "fas fa-chevron-down";
+        toggleDocumentsBtn.setAttribute("aria-label", "Show documents");
+      }
+    }
 
     // Function to add a message to the chat
     function addMessage(text, role = "assistant") {
@@ -573,6 +651,9 @@
     }
 
     // Event Listeners
+
+    // Toggle documents section
+    toggleDocumentsBtn.addEventListener("click", toggleDocuments);
 
     // Document upload trigger
     documentUploadTrigger.addEventListener("click", () => {
