@@ -4,6 +4,7 @@ import logging
 import json
 import numpy as np
 import tempfile
+import traceback
 from bs4 import BeautifulSoup
 from PyPDF2 import PdfReader
 from django.conf import settings
@@ -256,3 +257,12 @@ def log_user_action(session_key, action_type, details=None):
         "details": details or {},
     }
     logger.info(json.dumps(entry))
+
+
+
+def get_traceback_str(exception):
+    """Convert exception traceback to string for logging"""
+    try:
+        return ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+    except:
+        return str(exception)

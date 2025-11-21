@@ -39,3 +39,5 @@ uploads/
 .DS_Store
 # Ignore logs folder
 .logs/
+# Cache dir
+django_cache/

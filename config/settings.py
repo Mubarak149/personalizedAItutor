@@ -139,3 +139,19 @@ SUPABASE_KEY=os.getenv("SUPABASE_KEY", "")
 SUPABASE_URL=os.getenv("SUPABASE_URL", "")
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': os.path.join(BASE_DIR, 'django_cache'),  # Creates in project root
+        'TIMEOUT': 3600,  # 1 hour default
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
+    }
+}
+
+# Custom cache settings
+CACHE_ENABLED = True
+CACHE_TIMEOUT = 3600
