@@ -357,7 +357,7 @@ class ChatAPIView(APIView):
             retrieved_chunks = utils.search_similar_chunks(
                 question,
                 docs,
-                top_k=30
+                top_k=10
             )
 
             # 7. Generate final answer from chunks
