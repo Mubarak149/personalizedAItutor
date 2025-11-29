@@ -182,14 +182,19 @@ class ProcessLinkView(APIView):
             if typ == "youtube":
                 video_id = data.get("videoId") or utils.extract_youtube_id(url)
                 if not video_id:
-                    log_user_action(session_key, "youtube_error", {"error": "No video ID found", "url": url})
                     return Response({"error": "No video ID found"}, status=status.HTTP_400_BAD_REQUEST)
-                
-                # Log YouTube processing start
+
                 log_user_action(session_key, "youtube_processing_start", {"video_id": video_id, "url": url})
-                
+
                 yt_video_data = utils.fetch_youtube_info(url)
-                text = yt_video_data["transcript"]
+                if "error" in yt_video_data:
+                    log_user_action(session_key, "youtube_fetch_error", {"url": url, "error": yt_video_data["error"]})
+                    return Response({"error": yt_video_data["error"]}, status=status.HTTP_400_BAD_REQUEST)
+
+                text = yt_video_data.get("transcript")
+                if not text or text in ["No subtitles found", "No English subtitles available."]:
+                    return Response({"error": "Transcript not available"}, status=status.HTTP_400_BAD_REQUEST)
+
                 doc_data = {
                     "session_key": session_key,
                     "title": yt_video_data['title'],
@@ -201,10 +206,8 @@ class ProcessLinkView(APIView):
 
                 chunks = utils.chunk_content(text, chunk_size=500, chunk_overlap=50)
                 embeddings = utils.embed_chunks(chunks)
-                
                 utils.save_chunks(doc_id, chunks, embeddings)
 
-                # Log successful YouTube processing
                 log_user_action(
                     session_key,
                     "youtube_success",
@@ -214,7 +217,7 @@ class ProcessLinkView(APIView):
                         "video_title": yt_video_data['title'],
                         "content_length": len(text),
                         "chunks_count": len(chunks),
-                        "duration": yt_video_data.get('duration')
+                        "duration": yt_video_data.get('length_seconds')
                     }
                 )
 
@@ -222,6 +225,7 @@ class ProcessLinkView(APIView):
                     "status": "ok",
                     "document": {"id": doc_id, "title": doc_data["title"], "source": doc_data["source"]}
                 }, status=status.HTTP_201_CREATED)
+
 
             elif typ == "website":
                 if not url:
