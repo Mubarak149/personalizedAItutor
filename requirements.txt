@@ -1,0 +1,28 @@
+Django
+djangorestframework
+psycopg2-binary
+dj-database-url
+python-dotenv
+
+supabase
+requests
+
+pgvector
+numpy
+
+beautifulsoup4
+PyPDF2
+pytubefix
+
+langchain
+langchain-community
+langchain-core
+langchain-groq
+langchain-huggingface
+langchain-text-splitters
+
+jina-embeddings  # (sometimes auto-installed with langchain-community)
+
+google-auth      # required by supabase python client
+python-dateutil  # used internally by many libs
+typing-extensions

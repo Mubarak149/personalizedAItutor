@@ -131,7 +131,11 @@ def save_document(session_key, title, source, content="", uploaded_file=None):
 def save_chunks(document_id, chunks, embeddings):
     """Save chunks depending on environment (local ORM vs Supabase)."""
 
-    # Prepare the records (same for both environments)
+    if not chunks:
+        # Nothing to insert
+        logger.warning(f"Document {document_id} has no chunks. Skipping insert.")
+        return []
+
     records = [
         {
             "document_id": document_id,
@@ -142,14 +146,11 @@ def save_chunks(document_id, chunks, embeddings):
         for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
     ]
 
-    # Pick correct table name depending on environment
-    if settings.ENVIRONMENT == "production":
-        table_name = "document_chunk"      # Supabase table name
-    else:
-        table_name = "DocumentChunk"       # Django model name
+    table_name = "document_chunk" if settings.ENVIRONMENT == "production" else "DocumentChunk"
 
     query_interface.bulk_insert(table_name, records)
     return records
+
 
 
 def search_similar_chunks(query: str, docs=None, top_k=5):

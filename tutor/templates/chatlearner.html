@@ -9,6 +9,7 @@
   <!-- Font Awesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    /* Your existing CSS remains the same */
     :root {
       --primary-color: #4361ee;
       --secondary-color: #3f37c9;
@@ -460,7 +461,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script>
+<script>
     // DOM Elements - Get references to important HTML elements
     const chatBox = document.getElementById("chat-box");
     const chatForm = document.getElementById("chat-form");
@@ -477,6 +478,7 @@
     const toggleDocumentsBtn = document.getElementById("toggle-documents-btn");
     const toggleText = document.getElementById("toggle-text");
     const toggleIcon = document.getElementById("toggle-icon");
+    const documentList = document.getElementById("document-list");
     
     // Track current URL type for modal processing
     let currentUrlType = "";
@@ -491,6 +493,12 @@
     }
 
     const csrftoken = getCSRFToken();
+
+    // Function to get API URL - dynamically handles production/development
+    function getApiUrl(endpoint) {
+      // Use relative URLs for production compatibility
+      return endpoint;
+    }
 
     // Function to toggle documents section visibility
     function toggleDocuments() {
@@ -508,6 +516,40 @@
         toggleText.textContent = "Show";
         toggleIcon.className = "fas fa-chevron-down";
         toggleDocumentsBtn.setAttribute("aria-label", "Show documents");
+      }
+    }
+
+    // Function to add a single document to the document list
+    function addDocumentToUI(doc) {
+      // Remove "no documents" message if it exists
+      const noDocsMessage = documentList.querySelector('.text-muted');
+      if (noDocsMessage) {
+        noDocsMessage.remove();
+      }
+      
+      // Create the new document item
+      const documentItem = document.createElement("div");
+      documentItem.classList.add("document-item");
+      
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.classList.add("doc-checkbox");
+      checkbox.value = doc.id;
+      checkbox.id = `doc-${doc.id}`;
+      
+      const label = document.createElement("label");
+      label.htmlFor = `doc-${doc.id}`;
+      label.textContent = doc.title;
+      
+      documentItem.appendChild(checkbox);
+      documentItem.appendChild(label);
+      
+      // Add the new document to the beginning of the list
+      documentList.insertBefore(documentItem, documentList.firstChild);
+      
+      // Ensure documents section is visible when adding new documents
+      if (!documentsVisible) {
+        toggleDocuments();
       }
     }
 
@@ -606,13 +648,13 @@
     // Process a link (YouTube or website)
     async function processLink(url, type) {
       // Show processing message
-      addMessage(`🔗 Processing ${type} link...`, "assistant");
+      addMessage(`🔄 Processing ${type} link...`, "assistant");
       
       // Disable UI during processing
       setProcessingState(true);
 
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/documents/process-link/", {
+        const response = await fetch(getApiUrl("/api/documents/process-link/"), {
           method: "POST",
           headers: { 
             "X-CSRFToken": csrftoken,
@@ -625,11 +667,21 @@
 
         if (response.ok) {
           addMessage(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} processed successfully!`, "assistant");
+          
+          // If the response includes document data, add it to the UI
+          if (data.document || data.documents) {
+            const documents = data.documents || [data.document];
+            documents.forEach(doc => {
+              if (doc && doc.id) {
+                addDocumentToUI(doc);
+              }
+            });
+          }
         } else {
-          addMessage(`⚠️ Failed to process ${type}: ${data.error || JSON.stringify(data)}`, "assistant");
+          addMessage(`❌ Failed to process ${type}: ${data.error || JSON.stringify(data)}`, "assistant");
         }
       } catch (error) {
-        addMessage(`⚠️ Error processing ${type}: ${error.message}`, "assistant");
+        addMessage(`❌ Error processing ${type}: ${error.message}`, "assistant");
       } finally {
         // Re-enable UI
         setProcessingState(false);
@@ -720,7 +772,7 @@
       setProcessingState(true);
 
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/documents/upload/", {
+        const response = await fetch(getApiUrl("/api/documents/upload/"), {
           method: "POST",
           headers: { "X-CSRFToken": csrftoken },
           body: formData
@@ -729,13 +781,24 @@
         const data = await response.json();
 
         if (response.ok) {
-          showStatusMessage(`✅ Uploaded ${data.documents.length} file(s) successfully.`);
-          // Optionally refresh the document list here
+          const successMessage = `✅ Uploaded ${data.documents.length} file(s) successfully.`;
+          showStatusMessage(successMessage);
+          
+          // Add each uploaded document to the UI using the response data
+          data.documents.forEach(doc => {
+            addDocumentToUI(doc);
+          });
+          
+          // Show a brief confirmation in chat
+          setTimeout(() => {
+            addMessage(successMessage, "assistant");
+          }, 500);
+          
         } else {
-          showStatusMessage(`⚠️ Upload failed: ${data.error || JSON.stringify(data)}`, true);
+          showStatusMessage(`❌ Upload failed: ${data.error || JSON.stringify(data)}`, true);
         }
       } catch (error) {
-        showStatusMessage("⚠️ Error during upload: " + error.message, true);
+        showStatusMessage("❌ Error during upload: " + error.message, true);
       } finally {
         // Re-enable UI
         setProcessingState(false);
@@ -761,7 +824,7 @@
       setProcessingState(true);
 
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/chat/", {
+        const response = await fetch(getApiUrl("/api/chat/"), {
           method: "POST",
           headers: { 
             "X-CSRFToken": csrftoken, 
@@ -785,7 +848,7 @@
         removeTypingIndicator();
         
         // Show error message
-        addMessage("⚠️ Error: " + error.message, "assistant");
+        addMessage("❌ Error: " + error.message, "assistant");
       } finally {
         // Re-enable UI
         setProcessingState(false);
